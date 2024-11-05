@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@font-face {
+  font-family: Battambang;
+  src: url('./fonts/Battambang.ttf');
+}
+* {
+  font-family: "Battambang", sans-serif;
+  box-sizing: border-box;
+}
+.__default_color {
+  color: #1d4ed8;
+}
+
+.__default_bg_color {
+  background-color: #1d4ed8;
+}
