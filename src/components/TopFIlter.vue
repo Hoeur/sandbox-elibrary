@@ -35,7 +35,7 @@
     <!-- filter by ...  -->
     <div class="!grid grid-cols-2 md:grid-cols-4">
       <div
-        v-for="(item, idx) in props.all_categories"
+        v-for="(item, idx) in Categories.all_categories"
         v-bind:key="idx"
         class=""
       >
@@ -53,7 +53,7 @@
         </label>
       </div>
     </div>
-    <label v-if="props.all_categories.length > 4" class="">
+    <label v-if="Categories.all_categories.length > 4" class="">
       <div
         tabindex="0"
         class="link link-info text-center"
@@ -68,11 +68,12 @@
 <script lang="ts" setup>
 import { ref } from "vue";
 import { useGlobalDocument } from "../store/document";
+import { useCategories } from "../store/categories";
 const props = useGlobalDocument();
+const Categories = useCategories();
 const checkedNames = ref([]);
 props.filters = checkedNames;
-props.getAllCategories();
-console.log(props.all_categories);
+Categories.getAllCategories();
 
 const show_more = ref<boolean>(false);
 const showAll = ref(false);

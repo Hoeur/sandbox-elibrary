@@ -1,37 +1,24 @@
 import { defineStore } from "pinia";
 import axios from "axios";
-
+import download from "js-file-download";
+import type { Document, SourceItem } from "@/types/ApiData";
+import { API } from "@/types/api";
 interface Props {
     all_documents: Document[];
-    search_documents: any[];
     filters: any;
     total: number;
     document: Document;
+    suggestions: any[],
+    search_documents: any[],
     success: boolean;
     loading: boolean;
     error: boolean;
-    all_categories: any[];
+    page: number;
+    limit: number;
+    load_more: boolean;
+    pdf: any;
+    docx: any;
 }
-
-interface Document {
-    id: number;
-    type: string;
-    name: string;
-    comment: string;
-    keywords: string;
-    ownerid: number;
-    islocked: boolean;
-    expires: string;
-    version: number;
-    size: number;
-    date: any;
-    content: any | null;
-    categories: any;
-    views: number | null,
-    downloads: number | null,
-    heading:any;
-    css:any
-};
 
 // 
 export const useGlobalDocument = defineStore("document", {
@@ -40,7 +27,13 @@ export const useGlobalDocument = defineStore("document", {
     state: (): Props => ({
         total: 0,
         all_documents: [],
+        suggestions: [],
+        search_documents: [],
         filters: [],
+        page: 0,
+        limit: 25,
+        pdf: '',
+        docx: '',
         document: {
             id: 0,
             type: "",
@@ -52,18 +45,21 @@ export const useGlobalDocument = defineStore("document", {
             expires: "",
             version: 0,
             size: 0,
+            docx_size: 0,
             date: 0,
-            views:0,
-            downloads:0,
+            views: 0,
+            downloads: 0,
             content: null,
             categories: [],
-            heading:[],
-            css:null
+            heading: [],
+            css: null,
+            text: '',
+            words: '',
+            attributes: []
         },
-        search_documents: [],
-        all_categories: [],
         success: false,
         loading: false,
+        load_more: false,
         error: false
     }),
     actions: {
@@ -71,20 +67,28 @@ export const useGlobalDocument = defineStore("document", {
         /**
          * Get all documents
          */
-        async getAllDocuments() {
+        async getAllDocuments(query: any) {
             try {
+                let qry: any = "";
+                
+                this.page++;
+                if (query.query && !query.date) {
+                    qry = `?query=${query.query}&page=${this.page}&limit=${this.limit}`
+                }else if(query.date){
+                    qry = `?date=${query.date}&page=${this.page}&limit=${this.limit}`
+                } else {
+                    qry = `?page=${this.page}&limit=${this.limit}`
+                }
                 this.loading = true;
-                await axios.get(import.meta.env.VITE_VUE_APP_BASE_URL + "documents",
+                await axios.get(API + "documents" + qry,
                     {
                         withCredentials: false
                     }
                 )
                     .then(response => {
-                        setTimeout(() => {
-                            this.loading = false;
-                        }, 1200)
-                        this.total = response.data.data.length;
-                        this.all_documents = response.data.data
+                        this.total = response.data.total;
+                        this.all_documents = [...this.all_documents, ...response.data.data];
+                        this.loading = false;
                     })
             } catch (error) {
                 this.loading = false;
@@ -94,26 +98,56 @@ export const useGlobalDocument = defineStore("document", {
 
             }
         },
+        async loadMore(query: any) {
+            try {
+                let qry: any = "";
+                this.page++;
+                if (query.query && !query.date) {
+                    qry = `?query=${query.query}&page=${this.page}&limit=${this.limit}`
+                }else if(query.date){
+                    qry = `?date=${query.date}&page=${this.page}&limit=${this.limit}`
+                } else {
+                    qry = `?page=${this.page}&limit=${this.limit}`
+                }
+                this.load_more = true
+                await axios.get(API + "documents" + qry,
+                    {
+                        withCredentials: false
+                    }
+                )
+                    .then(response => {
+                        setTimeout(() => {
+                            this.load_more = false
+                            this.total = response.data.total;
+                            this.all_documents = [...this.all_documents, ...response.data.data];
+                        }, 1000)
+                    })
+            } catch (error) {
+                this.success = false;
+                this.load_more = false
+                this.error = true;
+                console.log(error);
 
+            }
+        },
         /**
         * Get Document by id
         */
         async getDocument(id: any) {
+            this.loading = true;
             try {
-                this.loading = true;
                 await axios
-                    .get(import.meta.env.VITE_VUE_APP_BASE_URL + "document/" + id,
+                    .get(API + "document/" + id,
                         {
                             withCredentials: false
                         })
                     .then((response) => {
-                        if (response) {
+                        if (response.data.code === 200 && response.data.data) {
+                            console.log(response);
                             this.success = true;
-                            setTimeout(() => {
-                                this.loading = false;
-                            }, 1200)
                             this.document = response.data.data
                             this.document.heading = JSON.parse(response.data.data?.heading)
+                            this.loading = false;
                         } else {
                             this.success = false;
                             this.error = true;
@@ -134,7 +168,7 @@ export const useGlobalDocument = defineStore("document", {
             try {
                 this.loading = true;
                 await axios
-                    .get(import.meta.env.VITE_VUE_APP_BASE_URL + "document/" + id + "/content",
+                    .get(API + "document/" + id + "/content",
                         {
                             withCredentials: false
                         })
@@ -155,20 +189,141 @@ export const useGlobalDocument = defineStore("document", {
                 this.error = true;
             }
         },
+        /**
+      * Download Document
+      */
+        async DownloadDocument(title: string, id: any, type: number = 1) {
+            try {
+                await axios
+                    .get(API + "view/" + id,
+                        {
+                            // responseType: 'blob', // Treat response as a binary blob
+                            withCredentials: false,
+                            // headers: { 'Content-Type': 'application/pdf' }
+                        }
+                    )
+                    .then((response) => {
+                        if (response) {
+                            console.log(response);
+                            this.document.size = response.data.size
+                                this.pdf = response.data;
+                            if (type == 1) {
+                                download(response.data, `${title}.pdf`, `${title}`, `${title}`);
+                            }
+                        }
+                    });
+            } catch (er) {
+                console.log(er);
+                this.loading = false;
+                this.success = false;
+                this.error = true;
+            }
+        },
+         /**
+      * Download Document
+      */
+         async DownloadDocumentPDF(title: string, id: any, type: number = 1) {
+            try {
+                await axios
+                    .get(API + "download/" + id,
+                        {
+                            // responseType: 'blob', // Treat response as a binary blob
+                            withCredentials: false,
+                            // headers: { 'Content-Type': 'application/pdf' }
+                        }
+                    )
+                    .then((response) => {
+                        if (response) {
+                            alert('gg2')
+                            console.log(response);
+                            // this.document.size = response.data.size
+                                this.pdf = response.data;
+                            if (type == 1) {
+                                download(response.data, `${title}.pdf`, `${title}`, `${title}`);
+                            }
+                        }
+                    });
+            } catch (er) {
+                console.log(er);
+                this.loading = false;
+                this.success = false;
+                this.error = true;
+            }
+        },
+        /**
+     * Download Document
+     */
+        async DownloadDocumentDocx(title: string, id: any, type: number = 1) {
+            try {
+                await axios
+                    .get(API + "download/docx/" + id,
+                        {
+                            responseType: 'blob', // Treat response as a binary blob
+                            withCredentials: false,
+                            headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }
+                        }
+                    )
+                    .then((response) => {
+                        if (response) {
+                            console.log(response);
+                            this.document.docx_size = response.data.size
+                            this.docx = response.data;
+                            if (type == 1) {
+                                download(response.data, `${title}.docx`, `${title}`, `${title}`);
+                            }
+                        }
+                    });
+            } catch (er) {
+                console.log(er);
+                this.loading = false;
+                this.success = false;
+                this.error = true;
+            }
+        },
+        async SearchLoadMore(keyword: any) {
+            try {
 
+                this.load_more = true
+                let qry: any = "";
+                this.page++;
+                qry = `&page=${this.page}&limit=${this.limit}`
+                await axios
+                    .get(import.meta.env.VITE_VUE_APP_BASE_URL + "search?q=" + keyword.search + "&type=" + keyword.type + "&categories=" + keyword.categories + qry,
+                        {
+                            withCredentials: false
+                        })
+                    .then((response) => {
+                        if (response.status === 200) {
+                            this.success = true;
+                            this.load_more = false
+                            this.search_documents = [...this.search_documents, ...response.data.data]
+                            this.total = response.data.total;
+                        } else {
+                            this.success = false;
+                            this.load_more = false
+                            this.error = true;
+                        }
+                    });
+            } catch (er) {
+                console.log(er);
+                this.load_more = false
+                this.success = false;
+                this.error = true;
+            }
+        },
         /**
          * search documents by keyword
          * @query keywords ,search,all
          */
-
         async SearchDocumentContent(keyword: any) {
-            console.log(keyword.category.split(','));
-
             try {
 
                 this.loading = true;
+                let qry: any = "";
+                this.page++;
+                qry = `&page=${this.page}&limit=${this.limit}`
                 await axios
-                    .get(import.meta.env.VITE_VUE_APP_BASE_URL + "search?q=" + keyword.search + "&all=" + keyword.all + "&category=" + keyword.category,
+                    .get(import.meta.env.VITE_VUE_APP_BASE_URL + "search?q=" + keyword.search + "&type=" + keyword.type + "&categories=" + keyword.categories + qry,
                         {
                             withCredentials: false
                         })
@@ -176,8 +331,8 @@ export const useGlobalDocument = defineStore("document", {
                         if (response.status === 200) {
                             this.success = true;
                             this.loading = false;
-                            this.search_documents = response.data.data
-                            this.total = response.data.data?.length;
+                            this.search_documents = [...this.search_documents, ...response.data.data]
+                            this.total = response.data.total;
                         } else {
                             this.success = false;
                             this.loading = false;
@@ -191,23 +346,17 @@ export const useGlobalDocument = defineStore("document", {
                 this.error = true;
             }
         },
-        /**
-         * 
-         * @param category 
-         */
-        async getAllCategories() {
+        async SearchSuggestions(keyword: any) {
             try {
-                this.loading = true;
                 await axios
-                    .get(import.meta.env.VITE_VUE_APP_BASE_URL + "categories",
+                    .get(import.meta.env.VITE_VUE_APP_BASE_URL + "search?q=" + keyword.search + "&type=" + keyword.type + "&categories=" + keyword.categories,
                         {
                             withCredentials: false
                         })
                     .then((response) => {
-                        if (response) {
+                        if (response.status === 200) {
                             this.success = true;
-                            this.loading = false;
-                            this.all_categories = response.data.data
+                            this.suggestions = response.data.data
                         } else {
                             this.success = false;
                             this.error = true;
@@ -215,65 +364,9 @@ export const useGlobalDocument = defineStore("document", {
                     });
             } catch (er) {
                 console.log(er);
-                this.loading = false;
                 this.success = false;
                 this.error = true;
             }
         },
-
-        /** 
-        * Register User
-        */
-        //     async createUser(user: string, pass: string) {
-        //         try {
-        //             await axios
-        //                 .post(import.meta.env.VITE_VUE_APP_BASE_URL + "login", {
-        //                     user: user,
-        //                     pass: pass
-        //                 })
-        //                 .then((response) => {
-        //                     if (response) {
-        //                         this.success = true;
-        //                     } else {
-        //                         this.success = false;
-        //                     }
-        //                 });
-        //         } catch (er) {
-        //             console.log(er);
-        //         }
-        //     },
-        //     async updateUser(user: string, pass: string, id: string) {
-        //         try {
-        //             await axios
-        //                 .put(import.meta.env.VITE_VUE_APP_BASE_URL + `login/${id}`, {
-        //                     user: user,
-        //                     pass: pass
-        //                 })
-        //                 .then((response) => {
-        //                     if (response) {
-        //                         this.success = true;
-        //                     } else {
-        //                         this.success = false;
-        //                     }
-        //                 });
-        //         } catch (er) {
-        //             console.log(er);
-        //         }
-        //     },
-        //     async deleteProducts(id: string) {
-        //         try {
-        //             await axios
-        //                 .delete(import.meta.env.VITE_VUE_APP_BASE_URL + `products/${id}`)
-        //                 .then((response) => {
-        //                     if (response.data) {
-        //                         this.success = true;
-        //                     } else {
-        //                         this.success = false;
-        //                     }
-        //                 });
-        //         } catch (er) {
-        //             console.log(er);
-        //         }
-        //     }
     }
 });

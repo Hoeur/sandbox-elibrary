@@ -1,139 +1,234 @@
 <script setup lang="ts">
-import { defineAsyncComponent, ref } from "vue";
-const SignIn = defineAsyncComponent(() => import("../auth/SignIn.vue"));
-const SignUp = defineAsyncComponent(() => import("../auth/SignUp.vue"));
+import { ref, onMounted, watch, watchEffect } from "vue";
 import { computed } from "vue";
 import { useGlobalDocument } from "../store/document";
+import { useCategories } from "../store/categories"
+import { useRoute } from 'vue-router';
+import { useRouter } from 'vue-router';
+const route = useRoute();
+const router = useRouter();
 const props = useGlobalDocument();
+const Categories = useCategories();
+
 const search = ref<string>("");
+const type = ref('all');
+const query = ref<any>(null);
+let searchQuery = "";
+const checkedNames = ref<any>([]);
 
-let searchQuery = localStorage.getItem("search") || "";
-if (!window.location.pathname.includes("result")) {
-  localStorage.removeItem("search");
-  searchQuery = "";
-}
-props.getAllCategories();
-if (searchQuery) {
-  search.value = searchQuery;
-}
-
-const checkedNames = ref([]);
-props.filters = checkedNames;
+watchEffect(() => {
+  props.filters = checkedNames;
+})
 
 const handleSearch = () => {
   localStorage.setItem("search", search.value);
-  window.location.href = `/result?search=${search.value}&all=true&category=${props.filters}`;
+  if (!search.value) {
+    search.value = " "
+    props.suggestions = []
+  }
+  window.location.href = `/result?search=${search.value}&type=${type.value}&categories=${props.filters}`;
 };
 
-
-const isShowSearch = () => {
-  const is = window.location.pathname
-  const no = is.split('/')
-  if(no[1] === 'document'){
-    return true
-  }
-  return false
-  
+const clickDocumentDetail = (id: any) => {
+  window.location.href = `/document/${id}`;
 }
 
-isShowSearch()
-//
-const getLang = localStorage.getItem("lang") || null;
-
-//
-const toggleLanguage = (lang: string) => {
-  window.location.reload();
-  localStorage.setItem("lang", lang);
+const isShowSearch = () => {
+// Access the current route object
+  const no = route.path.split("/");
+  return no[1] === "document" || no[1] === "news";
 };
+
+onMounted(() => {
+  isShowSearch();
+});
+
+
+const selectAllOption = (mobile: boolean) => {
+  checkedNames.value = Categories.all_categories.map(menu => menu.id);
+};
+
+const releaseAllOption = (mobile: boolean) => {
+  checkedNames.value = []
+};
+const showDropdown = ref(false);
+
+const handleFocus = () => {
+  showDropdown.value = true;
+};
+
+const handleBlur = () => {
+  setTimeout(() => {
+    showDropdown.value = false;
+  }, 500);
+};
+
+const searchDocument = async () => {
+  await props.SearchSuggestions({ search: search.value, type: type.value, categories: props.filters });
+};
+
+// Debounce function
+const debounce = (func: any, delay: any) => {
+  let timeoutId: any;
+  return (...args: any) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => {
+      func(...args);
+    }, delay);
+  };
+};
+
+watch([search, checkedNames, type], debounce(async() => {
+  await searchDocument();
+}, 500));
+
+
+watch(router.currentRoute, (to, from) => {
+  if (to && to.query) {
+    query.value = to.query;
+  }
+});
+
+onMounted(async () => {
+  await Categories.getAllCategories();
+  if (!window.location.pathname.includes("result")) {
+    localStorage.removeItem("search");
+    searchQuery = "";
+  }
+  if (searchQuery) {
+    search.value = searchQuery;
+  }
+  watchEffect(() => {
+    // If current route is already available, set the query
+    if (route.name == 'result' && route.query) {
+      query.value = route.query;
+      searchQuery = String(route.query.search)
+      search.value = String(route.query.search)
+      type.value = String(route.query.type)
+      checkedNames.value = String(route.query.categories).split(',').map(Number).filter(Boolean);
+    }
+  });
+});
+
+const highlightText = (text: string, words: string[]) => {
+  if (!words || words.length === 0) return text;
+
+  const regex = new RegExp(words?.join('|'), 'gi');
+  return text?.replace(regex, '<span class="highlight">$&</span>');
+};
+
 </script>
 <template>
-  <header
-    class="justify-between md:flex-col lg:flex-row bg_color items-center p-10 py-1 shadow-lg sticky top-0 z-50 md:flex hidden">
-    <a href="/">
-      <div class="flex items-center">
-        <img src="../assets/images/cropped-logo.png" class="w-[90px]" />
-        <div class="site-title-wrap ml-2">
-          <p class="site-title text-sm xl:text-xl text-white">
-            ក្រសួងរៀបចំដែនដី នគរូបនីយកម្ម និងសំណង់
-          </p>
-          <p class="site-description text-sm xl:text-xl text-white">
-            Ministry of Land Management, Urban Planning and Construction
-          </p>
+  <header class="md:block hidden">
+    <div>
+      <div
+        class="justify-between md:flex-col lg:flex-row bg_color items-center p-10 py-1 shadow-lg sticky top-0 z-50 md:flex">
+        <a href="/" class="w-full">
+          <div class="flex items-center">
+            <img src="../assets/images/cropped-logo.png" class="w-[90px]" />
+            <div class="site-title-wrap ml-2">
+              <p class="site-title text-sm md:text-xl text-white">
+                ក្រសួងរៀបចំដែនដី នគរូបនីយកម្ម និងសំណង់
+              </p>
+              <p class="site-description text-sm xl:text-md text-white mt-2" style="font-size: 15px;">
+                Ministry of Land Management, Urban Planning and Construction
+              </p>
+            </div>
+          </div>
+        </a>
+        <div class="flex">
+          <nav class="lg:flex text-[#051a53] gap-5 md:hidden">
+            <a href="https://web.facebook.com/mlmupc.pressteam" target="_blank">
+              <font-awesome-icon class="text-4xl" :icon="['fab', 'facebook']" />
+            </a>
+            <a href="https://www.youtube.com/@MLMUPC_KH" target="_blank">
+              <font-awesome-icon class="text-4xl" :icon="['fab', 'youtube']" />
+            </a>
+            <a href="https://t.me/MLMUPCofCambodia" target="_blank">
+              <font-awesome-icon class="text-4xl" :icon="['fab', 'telegram']" />
+            </a>
+            <a href="https://www.tiktok.com/@mlmupc_kh?is_from_webapp=1&sender_device=pc" target="_blank">
+              <font-awesome-icon class="text-4xl" :icon="['fab', 'tiktok']" />
+            </a>
+          </nav>
         </div>
       </div>
-    </a>
-    <div class="w-[400px] xl:w-[600px]">
-      <!-- TW Elements is free under AGPL, with commercial license required for specific uses. See more details: https://tw-elements.com/license/ and contact us for queries at tailwind@mdbootstrap.com -->
-      <div class="my-4">
-        <div class="relative flex w-full flex-wrap items-stretch">
-          <input type="text" size="medium"
-            class="relative m-0 placeholder:text-black -mr-0.5 block min-w-0 flex-auto rounded-l border-2 border-blue-900 bg-transparent bg-clip-padding px-3 py-[0.7rem] text-base font-normal leading-[1.6] text-black outline-none transition duration-200 ease-in-out focus:z-[3] focus:border-blue-900 focus:text-black focus:outline-none dark:border-blue-900 dark:text-slate-200 dark:placeholder:text-black dark:focus:border-blue-900"
-            :placeholder="$t('search')" aria-label="Search" v-model="search" @keyup.enter="handleSearch"
-            aria-describedby="button-addon1" />
+      <div class="grid grid-flow-col">
+        <div v-show="!isShowSearch()" class="text-xl col-span-2 text-center  py-3 text-[#051a53] pt-6 font-bold mr-2 ml-2 md:ml-10">
+            <p class="text-md md:text-xl text-[#051a53]">បណ្ណាល័យច្បាប់ឌីជីថល</p>
+          </div>
+        <div v-show="!isShowSearch()" class="w-full flex col-span-11 flex-col justify-center items-left ">
+          <div class="my-4 w-3/4 relative">
+            <div class="relative flex w-full flex-wrap items-stretch">
+              <input type="text" size="medium"
+                class="relative m-0 placeholder:text-slate-500 -mr-0.5 block min-w-0 flex-auto rounded-l border-2 border-blue-900 bg-transparent bg-clip-padding px-3 py-[0.7rem] text-base font-normal leading-[1.6] text-black outline-none transition duration-200 ease-in-out focus:z-[3] focus:border-blue-900 focus:text-black focus:outline-none dark:border-blue-900 dark:text-black dark:placeholder:text-slate-500 dark:focus:border-blue-900"
+                :placeholder="$t('search')" aria-label="Search" v-model="search" @keyup.enter="handleSearch"
+                @focus="handleFocus" @blur="handleBlur" aria-describedby="button-addon1" />
 
-          <!--Search button-->
-          <!-- <router-link :to="{ name: 'result', params: { search: search } }"> -->
-          <button
-            class="relative z-[2] flex items-center rounded-r dark:bg-blue-900 !bg-blue-900 px-6 py-2.5 text-xs font-medium uppercase leading-tight text-white shadow-md transition duration-150 ease-in-out hover:bg-blue-900 hover:shadow-lg focus:bg-blue-900 focus:shadow-lg focus:outline-none focus:ring-0 active:bg-blue-900 active:shadow-lg"
-            type="button" id="button-addon1" data-te-ripple-init data-te-ripple-color="light" @click="handleSearch">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
-              <path fill-rule="evenodd"
-                d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z"
-                clip-rule="evenodd" />
-            </svg>
-            <!-- {{ $t("search") }} -->
-          </button>
-          <!-- </router-link> -->
+              <!--Search button-->
+              <button
+                class="relative z-[2] flex items-center rounded-r dark:bg-blue-900 !bg-blue-900 px-6 py-2.5 text-xs font-medium uppercase leading-tight text-white shadow-md transition duration-150 ease-in-out hover:bg-blue-900 hover:shadow-lg focus:bg-blue-900 focus:shadow-lg focus:outline-none focus:ring-0 active:bg-blue-900 active:shadow-lg"
+                type="button" id="button-addon1" data-te-ripple-init data-te-ripple-color="light" @click="handleSearch">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+                  <path fill-rule="evenodd"
+                    d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z"
+                    clip-rule="evenodd" />
+                </svg>
+                <!-- {{ $t("search") }} -->
+              </button>
+            </div>
+            <div v-if="showDropdown"
+              class="absolute top-[calc(100%+5px)] w-full max-h-[500px] overflow-y-auto overflow-hidden whitespace-nowrap overflow-ellipsis bg-white shadow-lg transform transition-all duration-500 text-white ">
+              <ul class="menu text-black w-full p-0 [&_li>*]:rounded-none">
+                <!-- <div class="text-xl font-bold text-sky-600">ការផ្ដល់យោបល់</div> -->
+                <li v-show="props.suggestions.length > 0" v-for="(item, idx) in props.suggestions" :key="idx"
+                  class=" transform transition-all duration-500 hover:bg-sky-300 border-b border-b-slate-200">
+                  <a @click="clickDocumentDetail(item.id)" class="!block cursor-pointer">
+                    <div class="font-bold text-lg" v-html="highlightText(item.name, item.words)"></div>
+                    <!-- <div class="overflow-hidden whitespace-nowrap overflow-ellipsis w-[800px]"
+                      v-html="highlightText(item.text, item.words)"></div> -->
+                  </a>
+                </li>
+                <li v-show="props.suggestions.length == 0" class="border-b border-b-slate-200">
+                  <a class="!block">
+                    <div class="text-lg text-center">រកមិនឃើញ</div>
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div class="flex flex-wrap flex-col w-3/4">
+            <div class="bg-[#E5EBF5] !flex !items-center py-2 gap-2 rounded-md">
+              <label class="inline-flex items-center mx-2">
+                <input type="radio" name="op1" value="all" v-model="type" class="radio radio-info" />
+                <span class="ml-2 text-gray-700 font-bold">ពាក្យក្នុងអត្ថបទ</span>
+              </label>
+              <label class="inline-flex items-center mx-2 ml-8">
+                <input type="radio" name="op1" value="name" v-model="type" class="radio radio-info" />
+                <span class="ml-2 text-gray-700 font-bold">ពាក្យក្នុងឈ្មោះឯកសារ</span>
+              </label>
+
+            </div>
+            <div class="bg-[#E5EBF5] p-2 rounded-md mt-2">
+              <div class="grid grid-cols-4 lg:grid-cols-5 gap-2">
+                <label class="inline-flex items-center mx-2" v-for="(menu, idx) in Categories.all_categories"
+                  :key="idx">
+                  <input type="checkbox" :value="menu.id" v-model="checkedNames"
+                    class="checkbox large-screen !rounded-none checkbox-info ![--chkbg:#E5EBF5] ![--chkfg:#0EA5E9] !border-[#0EA5E9]" />
+                  <span class="ml-2 text-gray-700">{{ menu.name }}</span>
+                </label>
+              </div>
+              <div class="flex mt-2 ml-2 justify-start gap-5">
+                <button class="text-blue-700 filter-button"
+                  @click="() => selectAllOption(false)">ជ្រើសរើសទាំងអស់</button>
+                <button class="text-blue-700 filter-button"
+                  @click="() => releaseAllOption(false)">ដកការជ្រើសរើស</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
-    <!-- <div class="flex items-center">
-      <div class="dropdown mt-2 dropdown-bottom dropdown-end mr-6">
-        <div v-if="getLang === 'km'" tabindex="0" class="">
-          <div class="avatar cursor-pointer">
-            <div class="w-10 rounded-full">
-              <img src="../assets//cambodia.svg" />
-            </div>
-          </div>
-        </div>
-        <div v-else tabindex="0" class="">
-          <div class="avatar cursor-pointer">
-            <div class="w-10 rounded-full">
-              <img src="../assets/united-kingdom.svg" class="w-10" />
-            </div>
-          </div>
-        </div>
-        <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow !bg-white rounded-box w-52">
-          <li @click="toggleLanguage('km')">
-            <div class="avatar cursor-pointer">
-              <div class="w-8 rounded-full">
-                <img src="../assets/cambodia.svg" class="w-8" />
-              </div>
-              <span>ភាសាខ្មែរ</span>
-            </div>
-          </li>
-          <li @click="toggleLanguage('en')">
-            <div class="avatar cursor-pointer">
-              <div class="w-8 rounded-full">
-                <img src="../assets/united-kingdom.svg" class="w-8" />
-              </div>
-              <span>English</span>
-            </div>
-          </li>
-        </ul>
-      </div> -->
-
-    <!-- <div
-        class="avatar flex items-end justify-end placeholder"
-        onclick="my_modal_1.showModal()"
-      >
-        <div
-          class="w-14 bg-slate-200 dark:bg-neutral rounded-full outline hover:outline-sky-500 cursor-pointer text-2xl font-bold"
-        >
-          GS
-        </div>
-      </div> -->
-    <!-- </div> -->
   </header>
   <header class="md:hidden">
     <div class="navbar bg_color">
@@ -142,7 +237,7 @@ const toggleLanguage = (lang: string) => {
           <div class="flex items-center">
             <img src="../assets//images/cropped-logo.png" class="w-[60px]" />
             <div class="site-title-wrap ml-0">
-              <p class="site-title text-[11px] text-white">
+              <p class="site-title text-[12px] text-white">
                 ក្រសួងរៀបចំដែនដី នគរូបនីយកម្ម និងសំណង់
               </p>
               <p class="site-description text-[9px] text-white">
@@ -152,45 +247,14 @@ const toggleLanguage = (lang: string) => {
           </div>
         </a>
       </div>
-      <!-- <div class="navbar-end">
-        <button class="btn btn-ghost btn-circle text-white" onclick="my_modal_search.showModal()">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"
-            stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-        </button>
-
-        <dialog id="my_modal_search" class="modal">
-          <div class="modal-box !bg-white min-h-[90vh] py-10">
-            <form method="dialog">
-              <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">
-                ✕
-              </button>
-            </form>
-            <div>
-              <label class="input input-bordered !bg-white flex items-center gap-2 mt-4">
-                <input type="text" class="grow" placeholder="Search" aria-label="Search" v-model="search"
-                  @keyup.enter="handleSearch" />
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor"
-                  class="w-4 h-4 opacity-70">
-                  <path fill-rule="evenodd"
-                    d="M9.965 11.026a5 5 0 1 1 1.06-1.06l2.755 2.754a.75.75 0 1 1-1.06 1.06l-2.755-2.754ZM10.5 7a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Z"
-                    clip-rule="evenodd" />
-                </svg>
-              </label>
-            </div>
-          </div>
-        </dialog>
-      </div> -->
     </div>
     <div class="flex p-2" v-show="isShowSearch() === false">
-      <div class="my-4 w-full">
+      <div class="w-full relative">
         <div class="relative flex w-full items-stretch">
           <input type="text" size="medium"
-            class="relative m-0 placeholder:text-black -mr-0.5 block min-w-0 flex-auto rounded-l border border-blue-900 bg-transparent bg-clip-padding px-3 py-[0.25rem] font-normal leading-[1.6] text-black outline-none transition duration-200 ease-in-out focus:z-[3] focus:border-blue-900 focus:text-black focus:outline-none dark:border-blue-900 dark:text-black dark:placeholder:text-black dark:focus:border-blue-900"
+            class="relative m-0 placeholder:text-slate-500 -mr-0.5 block min-w-0 flex-auto rounded-l border border-blue-900 bg-transparent bg-clip-padding px-3 py-[0.25rem] font-normal leading-[1.6] text-black outline-none transition duration-200 ease-in-out focus:z-[3] focus:border-blue-900 focus:text-black focus:outline-none dark:border-blue-900 dark:text-black dark:placeholder:text-slate-500 dark:focus:border-blue-900"
             :placeholder="$t('search')" aria-label="Search" v-model="search" @keyup.enter="handleSearch"
-            aria-describedby="button-addon1" />
+            @focus="handleFocus" @blur="handleBlur" aria-describedby="button-addon1" />
           <button
             class="relative z-[2] flex items-center rounded-r dark:bg-blue-900 !bg-blue-900 px-3 py-2.5 text-xs font-medium uppercase leading-tight text-white shadow-md transition duration-150 ease-in-out hover:bg-blue-900 hover:shadow-lg focus:bg-blue-900 focus:shadow-lg focus:outline-none focus:ring-0 active:bg-blue-900 active:shadow-lg"
             type="button" id="button-addon1" data-te-ripple-init data-te-ripple-color="light" @click="handleSearch">
@@ -200,6 +264,25 @@ const toggleLanguage = (lang: string) => {
                 clip-rule="evenodd" />
             </svg>
           </button>
+        </div>
+        <div v-if="showDropdown"
+          class="absolute top-[calc(100%+5px)] w-full max-h-[500px] overflow-y-auto overflow-hidden overflow-ellipsis bg-white shadow-lg transform transition-all duration-500 text-white ">
+          <ul class="menu text-black w-full p-0 [&_li>*]:rounded-none">
+            <!-- <div class="text-xl font-bold text-sky-600">ការផ្ដល់យោបល់</div> -->
+            <li v-show="props.suggestions.length > 0" v-for="(item, idx) in props.suggestions" :key="idx"
+              class=" transform transition-all duration-500 hover:bg-sky-300 border-b border-b-slate-200">
+              <a @click="clickDocumentDetail(item.id)" class="!block cursor-pointer">
+                <div class="font-bold text-lg" v-html="highlightText(item.name, item.words)"></div>
+                <!-- <div class="overflow-hidden text-sm whitespace-nowrap overflow-ellipsis w-full max-w-[380px]"
+                  v-html="highlightText(item.text, item.words)"></div> -->
+              </a>
+            </li>
+            <li v-show="props.suggestions.length == 0" class="border-b border-b-slate-200">
+              <a class="!block">
+                <div class="text-lg text-center">រកមិនឃើញ</div>
+              </a>
+            </li>
+          </ul>
         </div>
       </div>
       <div class="drawer drawer-end !w-[50px] flex justify-center items-center z-[999999]">
@@ -214,8 +297,8 @@ const toggleLanguage = (lang: string) => {
         <div class="drawer-side z-[999999] !text-black">
           <label for="my-drawer-4" aria-label="close sidebar" class="drawer-overlay"></label>
 
-          <div class="z-[999999] p-4 w-80 min-h-full bg-white !text-blue-800">
-            <div class="navbar-center mb-5">
+          <div class="z-[999999] w-screen min-h-full bg-white !text-blue-800 flex flex-col pb-4">
+            <div class="navbar-center">
               <a href="/" class="!text-xl text-white font-bold">
                 <div class="flex items-center justify-center flex-col">
                   <img src="../assets//images/cropped-logo.png" class="w-[80px]" />
@@ -229,80 +312,85 @@ const toggleLanguage = (lang: string) => {
                   </div>
                 </div>
               </a>
+              <div class="absolute top-2 right-1">
+                <label for="my-drawer-4" aria-label="close sidebar">
+                  <svg class="transform transition-transform duration-500 hover:rotate-180"
+                    xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28px" height="28px">
+                    <path
+                      d="M 4.9902344 3.9902344 A 1.0001 1.0001 0 0 0 4.2929688 5.7070312 L 10.585938 12 L 4.2929688 18.292969 A 1.0001 1.0001 0 1 0 5.7070312 19.707031 L 12 13.414062 L 18.292969 19.707031 A 1.0001 1.0001 0 1 0 19.707031 18.292969 L 13.414062 12 L 19.707031 5.7070312 A 1.0001 1.0001 0 0 0 18.980469 3.9902344 A 1.0001 1.0001 0 0 0 18.292969 4.2929688 L 12 10.585938 L 5.7070312 4.2929688 A 1.0001 1.0001 0 0 0 4.9902344 3.9902344 z" />
+                  </svg>
+                </label>
+              </div>
             </div>
-            <div class="font-bold text-xl">ស្វែងរក</div>
             <div class="flex">
-              <div>
-                <label class="label cursor-pointer">
-                  <input type="radio" name="radio-10" class="radio radio-info" checked />
-                  <span class="label-text ml-2 !text-blue-800 font-bold">តែចំណងជើង</span>
-                </label>
-              </div>
-              <div class="">
-                <label class="label cursor-pointer">
-                  <input type="radio" name="radio-10" checked class="radio radio-info" />
-                  <span class="label-text ml-2 !text-blue-800 font-bold w-full">{{
-                    $t("all_of_contents")
-                    }}</span>
-                </label>
-              </div>
-            </div>
-            <div class="font-bold text-xl">ប្រភេទឯកសារ</div>
-            <div class="grid grid-cols-2 md:grid-cols-4">
-              <div v-for="(item, idx) in props.all_categories" v-bind:key="idx" class="">
-                <label class="cursor-pointer label mx-1">
-                  <input type="checkbox" v-model="checkedNames" :value="item.id" class="checkbox checkbox-info" />
-                  <span class="label-text !text-md ml-2 w-full !text-blue-800">{{ item.name }}</span>
-                </label>
-              </div>
-            </div>
-            <!-- <div class="font-bold text-xl">ប្ដូរភាសារ</div>
-            <div class="dropdown mt-2 dropdown-bottom !bg-white mr-6">
-              <div v-if="getLang === 'km'" tabindex="0" class="">
-                <div class="avatar cursor-pointer flex items-center">
-                  <div class="w-10 rounded-full">
-                    <img src="../assets//cambodia.svg" />
+              <div class="container mx-auto">
+                <div class="flex flex-col gap-4">
+                  <div class="relative flex w-full items-stretch p-2">
+                    <input type="text" size="medium"
+                      class="relative m-0 placeholder:text-black -mr-0.5 block min-w-0 flex-auto rounded-l border border-blue-900 bg-transparent bg-clip-padding px-3 py-[.75rem] font-normal leading-[1.6] text-black outline-none transition duration-200 ease-in-out focus:z-[3] focus:border-blue-900 focus:text-black focus:outline-none dark:border-blue-900 dark:text-black dark:placeholder:text-black dark:focus:border-blue-900"
+                      :placeholder="$t('search')" aria-label="Search" v-model="search" @keyup.enter="handleSearch"
+                      @focus="handleFocus" @blur="handleBlur" aria-describedby="button-addon1" />
+                    <div v-if="showDropdown"
+                      class="absolute top-[calc(100%+5px)] w-full max-h-[500px] overflow-y-auto overflow-hidden overflow-ellipsis bg-white shadow-lg transform transition-all duration-500 text-white ">
+                      <ul class="menu text-black w-full p-0 [&_li>*]:rounded-none">
+                        <!-- <div class="text-xl font-bold text-sky-600">ការផ្ដល់យោបល់</div> -->
+                        <li v-show="props.suggestions.length > 0" v-for="(item, idx) in props.suggestions" :key="idx"
+                          class=" transform transition-all duration-500 hover:bg-sky-300 border-b border-b-slate-200">
+                          <a @click="clickDocumentDetail(item.id)" class="!block cursor-pointer">
+                            <div class="font-bold text-lg" v-html="highlightText(item.name, item.words)"></div>
+                            <!-- <div class="overflow-hidden whitespace-nowrap overflow-ellipsis w-[400px]"
+                              v-html="highlightText(item.text, item.words)"></div> -->
+                          </a>
+                        </li>
+                        <li v-show="props.suggestions.length == 0" class="border-b border-b-slate-200">
+                          <a class="!block">
+                            <div class="text-lg text-center">រកមិនឃើញ</div>
+                          </a>
+                        </li>
+                      </ul>
+                    </div>
                   </div>
-                  <span class="ml-3 text-xl">ភាសាខ្មែរ</span>
+                  <div class="grid grid-cols-1 w-4/4 m-1">
+                    <div class="bg-[#E5EBF5] grid grid-cols-2 gap-1 py-4 px-1 rounded-md">
+                      <label class="items-center flex">
+                        <input type="radio" name="option1" value="all" v-model="type" class="radio radio-info" />
+                        <span class=" text-gray-700 ml-2">ពាក្យក្នុងអត្ថបទ</span>
+                      </label>
+                      <label class="flex items-center">
+                        <input type="radio" value="name" v-model="type" name="option1" class="radio radio-info" />
+                        <span class=" text-gray-700 ml-2">ពាក្យក្នុងឈ្មោះឯកសារ</span>
+                      </label>
+                    </div>
+                    <div class="bg-[#E5EBF5] p-2 rounded-md mt-2">
+                      <div class="grid grid-cols-2 gap-2">
+                        <label class="inline-flex items-center mx-2" v-for="(menu, idx) in Categories.all_categories"
+                          :key="idx">
+                          <input type="checkbox" :value="menu.id" v-model="checkedNames"
+                            class="checkbox large-screen !rounded-none checkbox-info ![--chkbg:#E5EBF5] ![--chkfg:#0EA5E9] !border-[#0EA5E9]" />
+                          <span class="ml-2 text-gray-700">{{ menu.name }}</span>
+                        </label>
+                      </div>
+                      <div class="flex mt-2 ml-2 justify-start gap-5">
+                        <button class="text-blue-700 filter-button"
+                          @click="() => selectAllOption(false)">ជ្រើសរើសទាំងអស់</button>
+                        <button class="text-blue-700 filter-button"
+                          @click="() => releaseAllOption(false)">ដកការជ្រើសរើស</button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div v-else tabindex="0" class="">
-                <div class="avatar cursor-pointer">
-                  <div class="w-10 rounded-full">
-                    <img src="../assets/united-kingdom.svg" class="w-10" />
-                  </div>
-                  <span class="ml-3 text-xl">English</span>
-                </div>
-              </div>
-              <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-white rounded-box w-52">
-                <li @click="toggleLanguage('km')">
-                  <div class="avatar cursor-pointer">
-                    <div class="w-8 rounded-full">
-                      <img src="../assets/cambodia.svg" class="w-8" />
-                    </div>
-                    <span>ភាសាខ្មែរ</span>
-                  </div>
-                </li>
-                <li @click="toggleLanguage('en')">
-                  <div class="avatar cursor-pointer">
-                    <div class="w-8 rounded-full">
-                      <img src="../assets/united-kingdom.svg" class="w-8" />
-                    </div>
-                    <span>English</span>
-                  </div>
-                </li>
-              </ul>
-            </div> -->
-            <div class="w-full flex justify-end">
-              <button class="btn btn-info !text-white w-full mt-4">Apply</button>
+            </div>
+            <div class="w-full grid grid-cols-1 gap-2 text-white px-1 mt-4">
+              <!-- <button class="btn btn-error !text-white !text-xl">លុប</button> -->
+              <button class="btn !bg-blue-900 !text-white !text-xl" @click="handleSearch">
+                <font-awesome-icon :icon="['fab', 'sistrix']" class="font-extrabold text-2xl" /> ស្វែងរក</button>
             </div>
           </div>
         </div>
       </div>
     </div>
   </header>
-  <SignIn />
-  <SignUp />
 </template>
 
 <style>
@@ -311,15 +399,61 @@ const toggleLanguage = (lang: string) => {
   src: url("../assets/fonts/Moulpali-Regular.ttf");
 }
 
+::-webkit-scrollbar {
+  width: 10px;
+  height: 0px;
+}
+
+/* Track */
+::-webkit-scrollbar-track {
+  box-shadow: inset 0 0 5px grey;
+  border-radius: 10px;
+}
+
+/* Handle */
+::-webkit-scrollbar-thumb {
+  background: #2a323c;
+  border-radius: 10px;
+}
+
+
+/* Handle */
+::-webkit-scrollbar-thumb {
+  background: #2a323c;
+  border-radius: 10px;
+}
+
+/* Handle on hover */
+::-webkit-scrollbar-thumb:hover {
+  background: #00b3f0;
+}
+
 .site-title {
-  font-family: Moulpali-Regular;
+  font-family: Moulpali-Regular !important;
+}
+
+.web_title{
+  font-family: Moulpali-Regular !important;
 }
 
 .bg_color {
-  background-color: #86C6E0;
+  background-color: #86c6e0;
 }
 
-@media only screen and (max-width: 990px) {
+.filter-button:hover {
+  border-bottom: 2px solid blue;
+}
+
+@media only screen and (max-width: 990px) {}
+
+.highlight {
+  color: #1E40AF !important;
+  background-color: rgb(155 183 242) !important;
+  /* Change the color to whatever you like */
+}
+
+.truncate {
+  /* Apply Tailwind's text truncation classes */
 
 }
 </style>

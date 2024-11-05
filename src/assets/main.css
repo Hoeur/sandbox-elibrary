@@ -9,6 +9,13 @@
   font-family: "Battambang", sans-serif;
   box-sizing: border-box;
 }
+
+body{
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  background-color: white;
+}
 .__default_color {
   color: #1d4ed8;
 }

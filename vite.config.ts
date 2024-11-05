@@ -8,6 +8,13 @@ export default defineConfig({
   plugins: [
     vue(),
   ],
+  build: {
+    minify: 'esbuild',
+    chunkSizeWarningLimit: 500,
+  },
+  optimizeDeps: {
+    include: ['vue', 'pinia', 'vue-i18n'],
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))

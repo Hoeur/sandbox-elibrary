@@ -10,5 +10,22 @@
     {
       "path": "./tsconfig.vitest.json"
     }
-  ]
+  ],
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "esnext", // or es2020, es2022, node16, etc.
+    "moduleResolution": "node",
+    "strict": true,
+    "jsx": "preserve",
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    "esModuleInterop": true,
+    "useDefineForClassFields": true,
+    "lib": ["esnext", "dom"],
+    "types": ["vite/client","lodash"]
+    
+  }
 }

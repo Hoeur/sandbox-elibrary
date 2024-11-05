@@ -4,7 +4,11 @@ export default {
   theme: {
     extend: {},
   },
-  plugins: [require("daisyui")],
+  darkMode: false, // or 'media' or 'class'
+  variants: {
+    extend: {},
+  },
+  plugins: [require('daisyui')],
   daisyui: {
     themes: ["light", "dark"],
   },
